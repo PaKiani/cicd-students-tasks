@@ -1,0 +1,45 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  IMAGE_NAME: $CI_REGISTRY/$CI_PROJECT_PATH/pakiani-python-app
+  IMAGE_TAG_DEV: $CI_COMMIT_SHA
+  IMAGE_TAG_PROD: latest
+
+build:
+  stage: build
+  image: docker:stable
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG_DEV .
+    - docker push $IMAGE_NAME:$IMAGE_TAG_DEV
+    - if [ -n "$CI_COMMIT_TAG" ]; then docker tag $IMAGE_NAME:$IMAGE_TAG_DEV $IMAGE_NAME:$IMAGE_TAG_PROD && docker push $IMAGE_NAME:$IMAGE_TAG_PROD; fi
+
+test:
+  stage: test
+  trigger:
+    include: .gitlab-ci-test.yml
+    strategy: depend
+
+deploy_dev:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - kubectl set image deployment/pakiani-app pakiani-app=$IMAGE_NAME:$IMAGE_TAG_DEV --record
+    - kubectl rollout status deployment/pakiani-app
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+
+deploy_prod:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - kubectl set image deployment/pakiani-app pakiani-app=$IMAGE_NAME:$IMAGE_TAG_PROD --record
+    - kubectl rollout status deployment/pakiani-app
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual

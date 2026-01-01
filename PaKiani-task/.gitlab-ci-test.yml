@@ -1,0 +1,9 @@
+stages:
+  - test
+
+unit_tests:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install -r requirements.txt
+    - python -m unittest test_app.py
